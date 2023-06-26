@@ -5,11 +5,12 @@ namespace App\Controller;
 use App\Entity\Message;
 use App\Repository\MessageRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Filesystem\Exception\IOExceptionInterface;
 use Symfony\Component\HttpFoundation\{Request, JsonResponse};
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-
-use Symfony\Component\Serializer\SerializerInterface;
 
 #[Route('/api', name: 'api_')]
 class MessageController extends AbstractController
@@ -46,11 +47,26 @@ class MessageController extends AbstractController
     #[Route('/message', name: 'message_create', methods: ['POST'])]
     public function createMessage(Request $request): JsonResponse
     {
+        $content = json_decode($request->getContent());
+
         $message = new Message();
-        $message->setContent($request->getContent());
+        $message->setContent($content);
 
         $this->entityManager->persist($message);
         $this->entityManager->flush();
+
+        try {
+            $filesystem = new Filesystem();
+            $tmpDirPath = $this->getParameter('kernel.project_dir') . '/var/tmp/';
+
+            if (!$filesystem->exists($tmpDirPath)) {
+                $filesystem->mkdir($tmpDirPath);
+            }
+
+            $tmp = $filesystem->dumpFile($tmpDirPath . $message->getId() . '.txt', $content);
+        } catch (IOExceptionInterface $exception) {
+            throw new \Exception($exception->getMessage());
+        }
 
         return new JsonResponse($message->getId(), JsonResponse::HTTP_CREATED);
     }
